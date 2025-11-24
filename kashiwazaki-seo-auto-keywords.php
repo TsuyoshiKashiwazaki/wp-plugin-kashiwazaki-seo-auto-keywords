@@ -3,7 +3,7 @@
 Plugin Name: Kashiwazaki SEO Auto Keywords
 Plugin URI: https://www.tsuyoshikashiwazaki.jp
 Description: OpenAI GPTを使ってWordPress投稿・固定ページ・カスタム投稿・メディアからSEOキーワードを自動生成します。
-Version: 1.0.0
+Version: 1.0.1
 Author: 柏崎剛 (Tsuyoshi Kashiwazaki)
 Author URI: https://www.tsuyoshikashiwazaki.jp/profile/
 */
@@ -25,6 +25,7 @@ class KashiwazakiSEOAutoKeywords {
         add_action('wp_ajax_generate_keywords', array($this, 'generate_keywords_ajax'));
         add_action('wp_ajax_check_api_settings', array($this, 'check_api_settings_ajax'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+        add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'add_settings_link'));
     }
 
     public function add_meta_box() {
@@ -215,18 +216,20 @@ class KashiwazakiSEOAutoKeywords {
         }
 
         if (isset($_POST['submit'])) {
-            // API プロバイダーの設定を保存
-            update_option('kashiwazaki_seo_api_provider', sanitize_text_field($_POST['api_provider']));
-
-            // API キーの設定を保存（プロバイダー別）
-            if (isset($_POST['api_provider']) && $_POST['api_provider'] === 'openai') {
+            // OpenAI APIキーの保存
+            if (isset($_POST['openai_api_key'])) {
                 update_option('kashiwazaki_seo_openai_api_key', sanitize_text_field($_POST['openai_api_key']));
-            } else {
-                update_option('kashiwazaki_seo_api_key', sanitize_text_field($_POST['api_key']));
             }
 
-            update_option('kashiwazaki_seo_model', sanitize_text_field($_POST['model']));
-            update_option('kashiwazaki_seo_keyword_count', intval($_POST['keyword_count']));
+            // モデルの保存
+            if (isset($_POST['model'])) {
+                update_option('kashiwazaki_seo_model', sanitize_text_field($_POST['model']));
+            }
+
+            // キーワード数の保存
+            if (isset($_POST['keyword_count'])) {
+                update_option('kashiwazaki_seo_keyword_count', intval($_POST['keyword_count']));
+            }
 
             // 投稿タイプの設定を保存
             $enabled_post_types = isset($_POST['enabled_post_types']) ? array_map('sanitize_text_field', $_POST['enabled_post_types']) : array();
@@ -1397,6 +1400,15 @@ class KashiwazakiSEOAutoKeywords {
         );
 
         wp_send_json_success($settings);
+    }
+
+    /**
+     * プラグイン一覧に「設定」リンクを追加
+     */
+    public function add_settings_link($links) {
+        $settings_link = '<a href="' . admin_url('admin.php?page=kashiwazaki-seo-keywords') . '">設定</a>';
+        array_unshift($links, $settings_link);
+        return $links;
     }
 }
 

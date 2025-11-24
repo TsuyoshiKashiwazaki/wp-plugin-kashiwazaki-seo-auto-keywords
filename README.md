@@ -1,5 +1,12 @@
 # Kashiwazaki SEO Auto Keywords
 
+![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
+![License](https://img.shields.io/badge/license-GPL--2.0%2B-green.svg)
+![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)
+![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple.svg)
+![Tested up to](https://img.shields.io/badge/Tested%20up%20to-WordPress%206.4-success.svg)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4.1-orange.svg)
+
 OpenAI GPT対応。WordPress投稿・固定ページ・カスタム投稿・メディアから自動でSEOキーワードを抽出・生成する高性能AIプラグインです。
 
 ## 主な機能
@@ -65,3 +72,12 @@ GPLv2 or later
 ## サポート・バグ報告
 
 プラグインに関する問題やご質問は、作者のWebサイトまでお問い合わせください。
+
+## 更新履歴
+
+### [1.0.1] - 2025-11-24
+- **修正**: APIキー設定時の「Undefined index」エラーを修正
+- **改善**: プラグイン一覧から設定画面へのリンクを追加
+
+### [1.0.0] - 2025-09-10
+- 初回リリース
