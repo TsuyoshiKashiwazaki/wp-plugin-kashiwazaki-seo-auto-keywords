@@ -3,7 +3,7 @@
 Plugin Name: Kashiwazaki SEO Auto Keywords
 Plugin URI: https://www.tsuyoshikashiwazaki.jp
 Description: OpenAI GPTを使ってWordPress投稿・固定ページ・カスタム投稿・メディアからSEOキーワードを自動生成します。
-Version: 1.0.1
+Version: 1.0.2
 Author: 柏崎剛 (Tsuyoshi Kashiwazaki)
 Author URI: https://www.tsuyoshikashiwazaki.jp/profile/
 */
@@ -13,10 +13,26 @@ if (!defined('ABSPATH')) exit;
 class KashiwazakiSEOAutoKeywords {
 
     /**
+     * シングルトンインスタンス
+     * @var KashiwazakiSEOAutoKeywords|null
+     */
+    private static $instance = null;
+
+    /**
      * デフォルトモデル情報を保存するプロパティ
      * @var array|null
      */
     private $default_model = null;
+
+    /**
+     * シングルトンインスタンスを取得
+     */
+    public static function get_instance() {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
 
     public function __construct() {
         add_action('add_meta_boxes', array($this, 'add_meta_box'));
@@ -24,6 +40,7 @@ class KashiwazakiSEOAutoKeywords {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('wp_ajax_generate_keywords', array($this, 'generate_keywords_ajax'));
         add_action('wp_ajax_check_api_settings', array($this, 'check_api_settings_ajax'));
+        add_action('wp_ajax_register_keywords_as_tags', array($this, 'register_keywords_as_tags_ajax'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'add_settings_link'));
     }
@@ -200,6 +217,16 @@ class KashiwazakiSEOAutoKeywords {
             array($this, 'admin_page'),
             'dashicons-admin-generic',
             81
+        );
+
+        // 一括キーワード生成＆登録サブメニュー
+        add_submenu_page(
+            'kashiwazaki-seo-keywords',
+            '一括キーワード生成＆登録',
+            '一括キーワード生成＆登録',
+            'manage_options',
+            'kashiwazaki-seo-bulk-keywords',
+            'kashiwazaki_seo_bulk_keywords_page_callback'
         );
     }
 
@@ -490,6 +517,777 @@ class KashiwazakiSEOAutoKeywords {
             </div>
             <?php endif; ?>
         </div>
+        <?php
+    }
+
+    /**
+     * 一括キーワード生成＆登録ページ
+     */
+    public function bulk_keywords_page() {
+        // 全ての公開投稿タイプを取得
+        $all_post_types = get_post_types(array('public' => true), 'objects');
+        unset($all_post_types['attachment']); // メディアは除外
+
+        $selected_post_type = isset($_GET['bulk_type']) ? sanitize_text_field($_GET['bulk_type']) : 'all';
+
+        // 選択された投稿タイプが有効か検証
+        if ($selected_post_type !== 'all' && !isset($all_post_types[$selected_post_type])) {
+            $selected_post_type = 'all';
+        }
+
+        $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+        $per_page_option = isset($_GET['per_page']) ? sanitize_text_field($_GET['per_page']) : '20';
+        $per_page = ($per_page_option === 'all') ? -1 : intval($per_page_option);
+        if ($per_page <= 0 && $per_page !== -1) {
+            $per_page = 20;
+        }
+
+        // ソート設定
+        $orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'date';
+        $order = isset($_GET['order']) ? sanitize_text_field($_GET['order']) : 'DESC';
+        $valid_orderby = array('date', 'title', 'ID', 'modified', 'keywords', 'tags', 'kw_status', 'tag_status');
+        if (!in_array($orderby, $valid_orderby)) {
+            $orderby = 'date';
+        }
+        $order = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
+
+        // フィルター：キーワード状態
+        $keyword_filter = isset($_GET['keyword_filter']) ? sanitize_text_field($_GET['keyword_filter']) : '';
+        // フィルター：タグ状態
+        $tag_filter = isset($_GET['tag_filter']) ? sanitize_text_field($_GET['tag_filter']) : '';
+
+        // 投稿タイプの設定（「すべて」の場合は全投稿タイプを配列で指定）
+        if ($selected_post_type === 'all') {
+            $query_post_types = array_keys($all_post_types);
+        } else {
+            $query_post_types = $selected_post_type;
+        }
+
+        // タグ・状態ソートの場合は全件取得してPHPでソート
+        $php_sort = in_array($orderby, array('tags', 'kw_status', 'tag_status'));
+        // タグフィルターの場合もPHPでフィルタリングするため全件取得
+        $needs_all_posts = $php_sort || $tag_filter || $per_page === -1;
+
+        // 投稿を取得
+        $args = array(
+            'post_type' => $query_post_types,
+            'post_status' => 'publish',
+            'posts_per_page' => $needs_all_posts ? -1 : $per_page,
+            'paged' => $needs_all_posts ? 1 : $paged,
+            'order' => $order
+        );
+
+        // キーワードでソートする場合
+        if ($orderby === 'keywords') {
+            $args['meta_key'] = '_kashiwazaki_seo_keywords';
+            $args['orderby'] = 'meta_value';
+        } elseif (!$php_sort) {
+            $args['orderby'] = $orderby;
+        }
+
+        // キーワードフィルター
+        if ($keyword_filter === 'has') {
+            $args['meta_query'] = array(
+                array(
+                    'key' => '_kashiwazaki_seo_keywords',
+                    'value' => '',
+                    'compare' => '!='
+                )
+            );
+        } elseif ($keyword_filter === 'none') {
+            $args['meta_query'] = array(
+                'relation' => 'OR',
+                array(
+                    'key' => '_kashiwazaki_seo_keywords',
+                    'compare' => 'NOT EXISTS'
+                ),
+                array(
+                    'key' => '_kashiwazaki_seo_keywords',
+                    'value' => '',
+                    'compare' => '='
+                )
+            );
+        }
+
+        // タグフィルター（PHPでフィルタリングするためフラグを設定）
+        $filter_by_tag = ($tag_filter === 'has' || $tag_filter === 'none');
+
+        $query = new WP_Query($args);
+
+        // タグフィルターをPHPで適用（tax_queryだと「なし」の判定が難しいため）
+        if ($filter_by_tag && $query->have_posts()) {
+            $filtered_posts = array();
+            foreach ($query->posts as $post) {
+                $post_tags = get_the_tags($post->ID);
+                $has_tags = $post_tags && !is_wp_error($post_tags) && count($post_tags) > 0;
+
+                if ($tag_filter === 'has' && $has_tags) {
+                    $filtered_posts[] = $post;
+                } elseif ($tag_filter === 'none' && !$has_tags) {
+                    $filtered_posts[] = $post;
+                }
+            }
+            $query->posts = $filtered_posts;
+            $query->post_count = count($filtered_posts);
+            $query->found_posts = count($filtered_posts);
+        }
+
+        // タグ・状態でソートする場合はPHPでソート
+        if ($php_sort && $query->have_posts()) {
+            $posts_array = $query->posts;
+
+            usort($posts_array, function($a, $b) use ($orderby, $order) {
+                if ($orderby === 'tags') {
+                    $tags_a = get_the_tags($a->ID);
+                    $tags_b = get_the_tags($b->ID);
+                    $count_a = $tags_a ? count($tags_a) : 0;
+                    $count_b = $tags_b ? count($tags_b) : 0;
+                    $result = $count_a - $count_b;
+                } elseif ($orderby === 'kw_status') {
+                    $kw_a = get_post_meta($a->ID, '_kashiwazaki_seo_keywords', true);
+                    $kw_b = get_post_meta($b->ID, '_kashiwazaki_seo_keywords', true);
+                    $has_a = !empty($kw_a) ? 1 : 0;
+                    $has_b = !empty($kw_b) ? 1 : 0;
+                    $result = $has_a - $has_b;
+                } else { // tag_status
+                    $tags_a = get_the_tags($a->ID);
+                    $tags_b = get_the_tags($b->ID);
+                    $has_a = ($tags_a && !is_wp_error($tags_a) && count($tags_a) > 0) ? 1 : 0;
+                    $has_b = ($tags_b && !is_wp_error($tags_b) && count($tags_b) > 0) ? 1 : 0;
+                    $result = $has_a - $has_b;
+                }
+                return $order === 'ASC' ? $result : -$result;
+            });
+
+            // ページネーション用に配列をスライス（全件表示の場合はスライスしない）
+            $total_posts = count($posts_array);
+            if ($per_page === -1) {
+                $total_pages = 1;
+                $query->posts = $posts_array;
+            } else {
+                $total_pages = ceil($total_posts / $per_page);
+                $offset = ($paged - 1) * $per_page;
+                $query->posts = array_slice($posts_array, $offset, $per_page);
+            }
+            $query->post_count = count($query->posts);
+        } elseif ($needs_all_posts) {
+            // タグフィルターのみの場合もページネーション処理（全件表示の場合はスライスしない）
+            $total_posts = $query->found_posts;
+            if ($per_page === -1) {
+                $total_pages = 1;
+            } else {
+                $total_pages = ceil($total_posts / $per_page);
+                $offset = ($paged - 1) * $per_page;
+                $query->posts = array_slice($query->posts, $offset, $per_page);
+            }
+            $query->post_count = count($query->posts);
+        } else {
+            $total_posts = $query->found_posts;
+            $total_pages = $per_page === -1 ? 1 : ceil($total_posts / $per_page);
+        }
+
+        // ソートリンク生成用ヘルパー
+        $current_url = admin_url('admin.php?page=kashiwazaki-seo-bulk-keywords&bulk_type=' . $selected_post_type);
+        if ($keyword_filter) {
+            $current_url .= '&keyword_filter=' . $keyword_filter;
+        }
+        if ($tag_filter) {
+            $current_url .= '&tag_filter=' . $tag_filter;
+        }
+        if ($per_page_option !== '20') {
+            $current_url .= '&per_page=' . $per_page_option;
+        }
+        ?>
+        <div class="wrap">
+            <h1>一括キーワード生成＆登録</h1>
+
+            <div style="background: #f0f8ff; border: 1px solid #b3d9ff; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0;">
+                    <strong>📋 使い方:</strong> 記事を選択して「キーワード抽出」ボタンをクリックすると、選択した記事のキーワードを一括で抽出・保存します。
+                </p>
+            </div>
+
+            <!-- フィルター -->
+            <div style="margin-bottom: 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                <form method="get" style="display: inline-flex; align-items: center; gap: 10px;">
+                    <input type="hidden" name="page" value="kashiwazaki-seo-bulk-keywords">
+
+                    <label for="bulk_type"><strong>投稿タイプ:</strong></label>
+                    <select name="bulk_type" id="bulk_type">
+                        <option value="all" <?php selected($selected_post_type, 'all'); ?>>
+                            すべて (<?php
+                                $total_all = 0;
+                                foreach ($all_post_types as $pt_slug => $pt_obj) {
+                                    $total_all += wp_count_posts($pt_slug)->publish;
+                                }
+                                echo $total_all;
+                            ?>)
+                        </option>
+                        <?php foreach ($all_post_types as $pt_slug => $pt_obj): ?>
+                            <option value="<?php echo esc_attr($pt_slug); ?>" <?php selected($selected_post_type, $pt_slug); ?>>
+                                <?php echo esc_html($pt_obj->labels->name); ?>
+                                (<?php echo wp_count_posts($pt_slug)->publish; ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+
+                    <label for="keyword_filter"><strong>KW:</strong></label>
+                    <select name="keyword_filter" id="keyword_filter">
+                        <option value="" <?php selected($keyword_filter, ''); ?>>すべて</option>
+                        <option value="has" <?php selected($keyword_filter, 'has'); ?>>生成済み</option>
+                        <option value="none" <?php selected($keyword_filter, 'none'); ?>>未生成</option>
+                    </select>
+
+                    <label for="tag_filter"><strong>タグ:</strong></label>
+                    <select name="tag_filter" id="tag_filter">
+                        <option value="" <?php selected($tag_filter, ''); ?>>すべて</option>
+                        <option value="has" <?php selected($tag_filter, 'has'); ?>>あり</option>
+                        <option value="none" <?php selected($tag_filter, 'none'); ?>>なし</option>
+                    </select>
+
+                    <label for="per_page"><strong>表示:</strong></label>
+                    <select name="per_page" id="per_page">
+                        <option value="20" <?php selected($per_page_option, '20'); ?>>20件</option>
+                        <option value="50" <?php selected($per_page_option, '50'); ?>>50件</option>
+                        <option value="100" <?php selected($per_page_option, '100'); ?>>100件</option>
+                        <option value="all" <?php selected($per_page_option, 'all'); ?>>全件</option>
+                    </select>
+
+                    <button type="submit" class="button">絞り込み</button>
+                </form>
+            </div>
+
+            <!-- 一括操作ボタン -->
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <button type="button" id="bulk-extract-btn" class="button button-primary" disabled>
+                    🔍 キーワード抽出
+                </button>
+                <button type="button" id="bulk-tag-btn" class="button button-primary" disabled style="background: #00a32a; border-color: #00a32a;">
+                    🏷️ キーワード→タグ登録
+                </button>
+                <button type="button" id="select-all-posts" class="button">全選択</button>
+                <button type="button" id="deselect-all-posts" class="button">全解除</button>
+                <button type="button" id="select-no-keywords" class="button">KW未生成を選択</button>
+                <button type="button" id="select-has-keywords" class="button">KW生成済みを選択</button>
+                <span id="selected-count" style="color: #666;">0件選択中</span>
+            </div>
+
+            <!-- 進捗表示 -->
+            <div id="bulk-progress" style="display: none; margin-bottom: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px;">
+                <div style="margin-bottom: 10px;">
+                    <strong>処理中...</strong> <span id="progress-text">0 / 0</span>
+                </div>
+                <div style="background: #e0e0e0; border-radius: 5px; height: 20px; overflow: hidden;">
+                    <div id="progress-bar" style="background: #0073aa; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+                <div id="progress-log" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 12px;"></div>
+            </div>
+
+            <!-- 記事一覧テーブル -->
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <td class="manage-column column-cb check-column" style="width: 30px;">
+                            <input type="checkbox" id="cb-select-all">
+                        </td>
+                        <th class="manage-column sortable <?php echo $orderby === 'ID' ? 'sorted' : ''; ?>" style="width: 50px;">
+                            <a href="<?php echo esc_url($current_url . '&orderby=ID&order=' . ($orderby === 'ID' && $order === 'ASC' ? 'DESC' : 'ASC')); ?>">
+                                <span>ID</span>
+                                <span class="sorting-indicator <?php echo $orderby === 'ID' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
+                            </a>
+                        </th>
+                        <?php if ($selected_post_type === 'all'): ?>
+                        <th class="manage-column" style="width: 80px;">タイプ</th>
+                        <?php endif; ?>
+                        <th class="manage-column sortable <?php echo $orderby === 'title' ? 'sorted' : ''; ?>">
+                            <a href="<?php echo esc_url($current_url . '&orderby=title&order=' . ($orderby === 'title' && $order === 'ASC' ? 'DESC' : 'ASC')); ?>">
+                                <span>タイトル</span>
+                                <span class="sorting-indicator <?php echo $orderby === 'title' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
+                            </a>
+                        </th>
+                        <th class="manage-column sortable <?php echo $orderby === 'date' ? 'sorted' : ''; ?>" style="width: 100px;">
+                            <a href="<?php echo esc_url($current_url . '&orderby=date&order=' . ($orderby === 'date' && $order === 'DESC' ? 'ASC' : 'DESC')); ?>">
+                                <span>日付</span>
+                                <span class="sorting-indicator <?php echo $orderby === 'date' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
+                            </a>
+                        </th>
+                        <th class="manage-column sortable <?php echo $orderby === 'tags' ? 'sorted' : ''; ?>" style="width: 180px;">
+                            <a href="<?php echo esc_url($current_url . '&orderby=tags&order=' . ($orderby === 'tags' && $order === 'DESC' ? 'ASC' : 'DESC')); ?>">
+                                <span>タグ</span>
+                                <span class="sorting-indicator <?php echo $orderby === 'tags' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
+                            </a>
+                        </th>
+                        <th class="manage-column sortable <?php echo $orderby === 'keywords' ? 'sorted' : ''; ?>" style="width: 220px;">
+                            <a href="<?php echo esc_url($current_url . '&orderby=keywords&order=' . ($orderby === 'keywords' && $order === 'DESC' ? 'ASC' : 'DESC')); ?>">
+                                <span>抽出キーワード</span>
+                                <span class="sorting-indicator <?php echo $orderby === 'keywords' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
+                            </a>
+                        </th>
+                        <th class="manage-column sortable <?php echo $orderby === 'kw_status' ? 'sorted' : ''; ?>" style="width: 40px; text-align: center;" title="キーワード生成状態">
+                            <a href="<?php echo esc_url($current_url . '&orderby=kw_status&order=' . ($orderby === 'kw_status' && $order === 'DESC' ? 'ASC' : 'DESC')); ?>">
+                                <span>KW</span>
+                                <span class="sorting-indicator <?php echo $orderby === 'kw_status' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
+                            </a>
+                        </th>
+                        <th class="manage-column sortable <?php echo $orderby === 'tag_status' ? 'sorted' : ''; ?>" style="width: 40px; text-align: center;" title="タグ反映状態">
+                            <a href="<?php echo esc_url($current_url . '&orderby=tag_status&order=' . ($orderby === 'tag_status' && $order === 'DESC' ? 'ASC' : 'DESC')); ?>">
+                                <span>タグ</span>
+                                <span class="sorting-indicator <?php echo $orderby === 'tag_status' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
+                            </a>
+                        </th>
+                        <th class="manage-column" style="width: 30px; text-align: center;" title="ページを表示">🔗</th>
+                    </tr>
+                </thead>
+                <tbody id="posts-table-body">
+                    <?php if ($query->have_posts()): while ($query->have_posts()): $query->the_post();
+                        $post_id = get_the_ID();
+                        $keywords = get_post_meta($post_id, '_kashiwazaki_seo_keywords', true);
+                        $tags = get_the_tags($post_id);
+                        $post_type_obj = get_post_type_object(get_post_type());
+                    ?>
+                    <tr data-post-id="<?php echo $post_id; ?>" data-has-keywords="<?php echo $keywords ? '1' : '0'; ?>">
+                        <th scope="row" class="check-column">
+                            <input type="checkbox" class="post-checkbox" value="<?php echo $post_id; ?>">
+                        </th>
+                        <td><?php echo $post_id; ?></td>
+                        <?php if ($selected_post_type === 'all'): ?>
+                        <td>
+                            <span class="post-type-badge post-type-<?php echo esc_attr(get_post_type()); ?>">
+                                <?php echo esc_html($post_type_obj->labels->singular_name); ?>
+                            </span>
+                        </td>
+                        <?php endif; ?>
+                        <td>
+                            <a href="<?php echo get_edit_post_link($post_id); ?>" target="_blank">
+                                <?php echo esc_html(get_the_title()); ?>
+                            </a>
+                        </td>
+                        <td><?php echo get_the_date('Y/m/d'); ?></td>
+                        <td class="tags-cell">
+                            <?php if ($tags && !is_wp_error($tags)): ?>
+                                <div class="tags-display-mini">
+                                    <?php
+                                    $tag_names = array_slice($tags, 0, 3);
+                                    foreach ($tag_names as $tag) {
+                                        echo '<span class="tag-mini">' . esc_html($tag->name) . '</span>';
+                                    }
+                                    if (count($tags) > 3) {
+                                        echo '<span class="tag-more">+' . (count($tags) - 3) . '</span>';
+                                    }
+                                    ?>
+                                </div>
+                            <?php else: ?>
+                                <span style="color: #999; font-size: 11px;">タグなし</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="keywords-cell">
+                            <?php if ($keywords): ?>
+                                <div class="keywords-display-mini">
+                                    <?php
+                                    $keyword_array = array_slice(explode(',', $keywords), 0, 4);
+                                    foreach ($keyword_array as $kw) {
+                                        echo '<span class="keyword-tag-mini">' . esc_html(trim($kw)) . '</span>';
+                                    }
+                                    $total_kw = count(explode(',', $keywords));
+                                    if ($total_kw > 4) {
+                                        echo '<span class="keyword-more">+' . ($total_kw - 4) . '</span>';
+                                    }
+                                    ?>
+                                </div>
+                            <?php else: ?>
+                                <span style="color: #999;">未設定</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="kw-status-cell" style="text-align: center;">
+                            <span class="status-icon <?php echo $keywords ? 'status-ok' : 'status-none'; ?>" title="<?php echo $keywords ? 'キーワード生成済み' : 'キーワード未生成'; ?>">
+                                <?php echo $keywords ? '✓' : '−'; ?>
+                            </span>
+                        </td>
+                        <td class="tag-status-cell" style="text-align: center;">
+                            <?php $has_tags = $tags && !is_wp_error($tags) && count($tags) > 0; ?>
+                            <span class="status-icon <?php echo $has_tags ? 'status-ok' : 'status-none'; ?>" title="<?php echo $has_tags ? 'タグ反映済み' : 'タグ未反映'; ?>">
+                                <?php echo $has_tags ? '✓' : '−'; ?>
+                            </span>
+                        </td>
+                        <td style="text-align: center;">
+                            <a href="<?php echo get_permalink($post_id); ?>" target="_blank" title="ページを表示" style="text-decoration: none; font-size: 14px;">↗</a>
+                        </td>
+                    </tr>
+                    <?php endwhile; wp_reset_postdata(); else: ?>
+                    <tr>
+                        <td colspan="<?php echo $selected_post_type === 'all' ? '10' : '9'; ?>" style="text-align: center; padding: 20px;">
+                            記事が見つかりませんでした。
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+
+            <!-- ページネーション -->
+            <?php if ($total_pages > 1): ?>
+            <div class="tablenav bottom">
+                <div class="tablenav-pages">
+                    <span class="displaying-num"><?php echo $total_posts; ?>件</span>
+                    <span class="pagination-links">
+                        <?php if ($paged > 1): ?>
+                            <a class="first-page button" href="<?php echo add_query_arg(array('paged' => 1)); ?>">«</a>
+                            <a class="prev-page button" href="<?php echo add_query_arg(array('paged' => $paged - 1)); ?>">‹</a>
+                        <?php endif; ?>
+                        <span class="paging-input">
+                            <span class="current-page"><?php echo $paged; ?></span> / <span class="total-pages"><?php echo $total_pages; ?></span>
+                        </span>
+                        <?php if ($paged < $total_pages): ?>
+                            <a class="next-page button" href="<?php echo add_query_arg(array('paged' => $paged + 1)); ?>">›</a>
+                            <a class="last-page button" href="<?php echo add_query_arg(array('paged' => $total_pages)); ?>">»</a>
+                        <?php endif; ?>
+                    </span>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <style>
+            .keywords-display-mini, .tags-display-mini {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 3px;
+            }
+            .keyword-tag-mini {
+                background: #0073aa;
+                color: white;
+                padding: 1px 5px;
+                border-radius: 8px;
+                font-size: 10px;
+                display: inline-block;
+            }
+            .tag-mini, .tag-badge {
+                background: #23282d;
+                color: white;
+                padding: 1px 5px;
+                border-radius: 8px;
+                font-size: 10px;
+                display: inline-block;
+            }
+            .keyword-more, .tag-more {
+                background: #666;
+                color: white;
+                padding: 1px 5px;
+                border-radius: 8px;
+                font-size: 10px;
+            }
+            .status-badge {
+                padding: 3px 8px;
+                border-radius: 3px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            .status-badge.has-keywords {
+                background: #d4edda;
+                color: #155724;
+            }
+            .status-badge.no-keywords {
+                background: #f8d7da;
+                color: #721c24;
+            }
+            .status-badge.processing {
+                background: #fff3cd;
+                color: #856404;
+            }
+            .status-badge.success {
+                background: #d4edda;
+                color: #155724;
+            }
+            .status-badge.error {
+                background: #f8d7da;
+                color: #721c24;
+            }
+            .status-icon {
+                font-weight: bold;
+                font-size: 14px;
+            }
+            .status-icon.status-ok {
+                color: #28a745;
+            }
+            .status-icon.status-none {
+                color: #ccc;
+            }
+            #progress-log div {
+                padding: 2px 5px;
+                border-bottom: 1px solid #eee;
+            }
+            #progress-log div.success { color: #155724; }
+            #progress-log div.error { color: #721c24; }
+            /* ソートインジケーター */
+            .wp-list-table th.sortable a,
+            .wp-list-table th.sorted a {
+                display: flex;
+                align-items: center;
+                text-decoration: none;
+            }
+            .sorting-indicator {
+                margin-left: 5px;
+            }
+            .sorting-indicator.asc::after {
+                content: "▲";
+                font-size: 10px;
+            }
+            .sorting-indicator.desc::after {
+                content: "▼";
+                font-size: 10px;
+            }
+            /* 投稿タイプバッジ */
+            .post-type-badge {
+                display: inline-block;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 10px;
+                font-weight: bold;
+            }
+            .post-type-post {
+                background: #0073aa;
+                color: white;
+            }
+            .post-type-page {
+                background: #00a32a;
+                color: white;
+            }
+            .post-type-badge:not(.post-type-post):not(.post-type-page) {
+                background: #9b59b6;
+                color: white;
+            }
+        </style>
+
+        <script>
+        jQuery(document).ready(function($) {
+            var selectedPosts = [];
+
+            function updateSelectedCount() {
+                selectedPosts = [];
+                $('.post-checkbox:checked').each(function() {
+                    selectedPosts.push($(this).val());
+                });
+                $('#selected-count').text(selectedPosts.length + '件選択中');
+                $('#bulk-extract-btn').prop('disabled', selectedPosts.length === 0);
+                $('#bulk-tag-btn').prop('disabled', selectedPosts.length === 0);
+            }
+
+            // チェックボックス変更
+            $('.post-checkbox').on('change', updateSelectedCount);
+            $('#cb-select-all').on('change', function() {
+                $('.post-checkbox').prop('checked', $(this).is(':checked'));
+                updateSelectedCount();
+            });
+
+            // 全選択/全解除ボタン
+            $('#select-all-posts').on('click', function() {
+                $('.post-checkbox').prop('checked', true);
+                $('#cb-select-all').prop('checked', true);
+                updateSelectedCount();
+            });
+            $('#deselect-all-posts').on('click', function() {
+                $('.post-checkbox').prop('checked', false);
+                $('#cb-select-all').prop('checked', false);
+                updateSelectedCount();
+            });
+
+            // 未設定のみ選択ボタン
+            $('#select-no-keywords').on('click', function() {
+                $('.post-checkbox').prop('checked', false);
+                $('tr[data-has-keywords="0"] .post-checkbox').prop('checked', true);
+                $('#cb-select-all').prop('checked', false);
+                updateSelectedCount();
+            });
+
+            // KW生成済みを選択ボタン
+            $('#select-has-keywords').on('click', function() {
+                $('.post-checkbox').prop('checked', false);
+                $('tr[data-has-keywords="1"] .post-checkbox').prop('checked', true);
+                $('#cb-select-all').prop('checked', false);
+                updateSelectedCount();
+            });
+
+            // 一括抽出
+            $('#bulk-extract-btn').on('click', function() {
+                if (selectedPosts.length === 0) return;
+
+                var btn = $(this);
+                btn.prop('disabled', true).text('処理中...');
+                $('#bulk-progress').show();
+                $('#progress-log').empty();
+
+                var total = selectedPosts.length;
+                var current = 0;
+                var success = 0;
+                var failed = 0;
+
+                function processNext() {
+                    if (current >= total) {
+                        btn.prop('disabled', false).text('🔍 選択した記事のキーワードを抽出');
+                        $('#progress-log').prepend('<div class="success"><strong>完了: ' + success + '件成功, ' + failed + '件失敗</strong></div>');
+                        return;
+                    }
+
+                    var postId = selectedPosts[current];
+                    var row = $('tr[data-post-id="' + postId + '"]');
+                    row.find('.kw-status-cell').html('<span class="status-badge processing">...</span>');
+
+                    $.ajax({
+                        url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                        type: 'POST',
+                        data: {
+                            action: 'generate_keywords',
+                            post_id: postId,
+                            save_keywords: 'true',
+                            nonce: '<?php echo wp_create_nonce('kashiwazaki_seo_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            current++;
+                            var percent = Math.round((current / total) * 100);
+                            $('#progress-bar').css('width', percent + '%');
+                            $('#progress-text').text(current + ' / ' + total);
+
+                            if (response.success) {
+                                success++;
+                                var keywords = response.data.keywords || response.data;
+                                row.find('.kw-status-cell').html('<span class="status-icon status-ok" title="キーワード生成済み">✓</span>');
+                                row.attr('data-has-keywords', '1');
+
+                                // キーワード表示を更新
+                                var keywordArray = keywords.split(',').slice(0, 5);
+                                var html = '<div class="keywords-display-mini">';
+                                keywordArray.forEach(function(kw) {
+                                    html += '<span class="keyword-tag-mini">' + kw.trim() + '</span>';
+                                });
+                                var totalKw = keywords.split(',').length;
+                                if (totalKw > 5) {
+                                    html += '<span class="keyword-more">+' + (totalKw - 5) + '</span>';
+                                }
+                                html += '</div>';
+                                row.find('.keywords-cell').html(html);
+
+                                $('#progress-log').prepend('<div class="success">✓ ID:' + postId + ' - 成功</div>');
+                            } else {
+                                failed++;
+                                row.find('.kw-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                                $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - ' + response.data + '</div>');
+                            }
+
+                            // 次の記事を処理（少し遅延を入れてAPI制限を回避）
+                            setTimeout(processNext, 1000);
+                        },
+                        error: function() {
+                            current++;
+                            failed++;
+                            row.find('.kw-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                            $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - 通信エラー</div>');
+                            setTimeout(processNext, 1000);
+                        }
+                    });
+                }
+
+                processNext();
+            });
+
+            // 一括タグ登録
+            $('#bulk-tag-btn').on('click', function() {
+                if (selectedPosts.length === 0) return;
+
+                // キーワードが設定されている記事のみをフィルタ
+                var postsWithKeywords = [];
+                selectedPosts.forEach(function(postId) {
+                    var row = $('tr[data-post-id="' + postId + '"]');
+                    if (row.attr('data-has-keywords') === '1') {
+                        postsWithKeywords.push(postId);
+                    }
+                });
+
+                if (postsWithKeywords.length === 0) {
+                    alert('キーワードが生成されている記事が選択されていません。\n「KW生成済みを選択」ボタンを使用して選択してください。');
+                    return;
+                }
+
+                if (!confirm(postsWithKeywords.length + '件の記事のキーワードをタグとして登録します。よろしいですか？')) {
+                    return;
+                }
+
+                var btn = $(this);
+                btn.prop('disabled', true).text('処理中...');
+                $('#bulk-progress').show();
+                $('#progress-log').empty();
+
+                var total = postsWithKeywords.length;
+                var current = 0;
+                var success = 0;
+                var failed = 0;
+
+                function processNextTag() {
+                    if (current >= total) {
+                        btn.prop('disabled', false).html('🏷️ キーワード→タグ登録');
+                        $('#progress-log').prepend('<div class="success"><strong>完了: ' + success + '件成功, ' + failed + '件失敗</strong></div>');
+                        return;
+                    }
+
+                    var postId = postsWithKeywords[current];
+                    var row = $('tr[data-post-id="' + postId + '"]');
+                    row.find('.tag-status-cell').html('<span class="status-badge processing">...</span>');
+
+                    $.ajax({
+                        url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                        type: 'POST',
+                        data: {
+                            action: 'register_keywords_as_tags',
+                            post_id: postId,
+                            nonce: '<?php echo wp_create_nonce('kashiwazaki_seo_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            current++;
+                            var percent = Math.round((current / total) * 100);
+                            $('#progress-bar').css('width', percent + '%');
+                            $('#progress-text').text(current + ' / ' + total);
+
+                            if (response.success) {
+                                success++;
+                                row.find('.tag-status-cell').html('<span class="status-icon status-ok" title="タグ反映済み">✓</span>');
+
+                                // タグ表示を更新
+                                var allTags = response.data.all_tags || [];
+                                var displayTags = allTags.slice(0, 3);
+                                var html = '';
+                                displayTags.forEach(function(tag) {
+                                    html += '<span class="tag-badge">' + tag + '</span>';
+                                });
+                                if (allTags.length > 3) {
+                                    html += '<span class="tag-more">+' + (allTags.length - 3) + '</span>';
+                                }
+                                if (html === '') {
+                                    html = '<span style="color: #999;">-</span>';
+                                }
+                                row.find('.tags-cell').html(html);
+
+                                $('#progress-log').prepend('<div class="success">✓ ID:' + postId + ' - ' + response.data.message + '</div>');
+                            } else {
+                                failed++;
+                                row.find('.tag-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                                $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - ' + response.data + '</div>');
+                            }
+
+                            // 次の記事を処理
+                            setTimeout(processNextTag, 500);
+                        },
+                        error: function() {
+                            current++;
+                            failed++;
+                            row.find('.tag-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                            $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - 通信エラー</div>');
+                            setTimeout(processNextTag, 500);
+                        }
+                    });
+                }
+
+                processNextTag();
+            });
+        });
+        </script>
         <?php
     }
 
@@ -1124,6 +1922,13 @@ class KashiwazakiSEOAutoKeywords {
 
         $this->debug_log('Kashiwazaki SEO: キーワード生成成功 - ' . $keywords);
 
+        // 一括処理の場合はキーワードを自動保存
+        $save_keywords = isset($_POST['save_keywords']) && $_POST['save_keywords'] === 'true';
+        if ($save_keywords) {
+            update_post_meta($post_id, '_kashiwazaki_seo_keywords', sanitize_textarea_field($keywords));
+            $this->debug_log('Kashiwazaki SEO: キーワードを自動保存しました - 投稿ID: ' . $post_id);
+        }
+
         // 使用モデル名を取得（デフォルトモデルの場合も適切に処理）
         $actual_model = !empty($model) ? $model : $this->get_default_model();
         $model_display_name = $this->get_model_display_name($actual_model);
@@ -1139,7 +1944,8 @@ class KashiwazakiSEOAutoKeywords {
             wp_send_json_success(array(
                 'keywords' => $keywords,
                 'used_model' => $model_display_name,
-                'model_id' => $actual_model
+                'model_id' => $actual_model,
+                'saved' => $save_keywords
             ));
         } else {
             // フォールバック：通常の文字列として返す
@@ -1403,6 +2209,73 @@ class KashiwazakiSEOAutoKeywords {
     }
 
     /**
+     * キーワードをタグとして登録するAJAXハンドラ
+     */
+    public function register_keywords_as_tags_ajax() {
+        check_ajax_referer('kashiwazaki_seo_nonce', 'nonce');
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+
+        if (!$post_id) {
+            wp_send_json_error('投稿IDが指定されていません');
+        }
+
+        // 投稿からキーワードを取得
+        $keywords = get_post_meta($post_id, '_kashiwazaki_seo_keywords', true);
+
+        if (empty($keywords)) {
+            wp_send_json_error('キーワードが設定されていません');
+        }
+
+        // キーワードを配列に変換
+        $keyword_array = explode(',', $keywords);
+        $tags_to_add = array();
+
+        foreach ($keyword_array as $keyword) {
+            $keyword = trim($keyword);
+            if (!empty($keyword)) {
+                // スペースをハイフンに正規化
+                $keyword = preg_replace('/\s+/', '-', $keyword);
+                $keyword = preg_replace('/-+/', '-', $keyword);
+                $keyword = trim($keyword, '-');
+
+                if (!empty($keyword)) {
+                    $tags_to_add[] = $keyword;
+                }
+            }
+        }
+
+        if (empty($tags_to_add)) {
+            wp_send_json_error('有効なキーワードがありません');
+        }
+
+        // 重複を削除
+        $tags_to_add = array_unique($tags_to_add);
+
+        // タグとして登録（既存のタグに追加）
+        $result = wp_set_post_tags($post_id, $tags_to_add, true);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error('タグの登録に失敗しました: ' . $result->get_error_message());
+        }
+
+        // 登録後のタグ一覧を取得
+        $tags = get_the_tags($post_id);
+        $tag_names = array();
+        if ($tags) {
+            foreach ($tags as $tag) {
+                $tag_names[] = $tag->name;
+            }
+        }
+
+        wp_send_json_success(array(
+            'message' => count($tags_to_add) . '個のタグを登録しました',
+            'tags_added' => $tags_to_add,
+            'all_tags' => $tag_names
+        ));
+    }
+
+    /**
      * プラグイン一覧に「設定」リンクを追加
      */
     public function add_settings_link($links) {
@@ -1412,4 +2285,12 @@ class KashiwazakiSEOAutoKeywords {
     }
 }
 
-new KashiwazakiSEOAutoKeywords();
+// シングルトンインスタンスを初期化
+KashiwazakiSEOAutoKeywords::get_instance();
+
+/**
+ * 一括キーワード生成＆登録ページのコールバック関数
+ */
+function kashiwazaki_seo_bulk_keywords_page_callback() {
+    KashiwazakiSEOAutoKeywords::get_instance()->bulk_keywords_page();
+}
