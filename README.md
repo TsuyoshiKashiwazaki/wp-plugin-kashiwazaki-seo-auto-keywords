@@ -1,6 +1,6 @@
 # Kashiwazaki SEO Auto Keywords
 
-![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)
 ![License](https://img.shields.io/badge/license-GPL--2.0%2B-green.svg)
 ![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple.svg)
@@ -74,6 +74,9 @@ GPLv2 or later
 プラグインに関する問題やご質問は、作者のWebサイトまでお問い合わせください。
 
 ## 更新履歴
+
+### [1.0.3] - 2025-12-05
+- **追加**: プラグイン一覧ページに「一括生成」へのリンクを追加
 
 ### [1.0.2] - 2025-11-25
 - **追加**: 一括キーワード生成＆登録機能

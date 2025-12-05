@@ -3,7 +3,7 @@
 Plugin Name: Kashiwazaki SEO Auto Keywords
 Plugin URI: https://www.tsuyoshikashiwazaki.jp
 Description: OpenAI GPTを使ってWordPress投稿・固定ページ・カスタム投稿・メディアからSEOキーワードを自動生成します。
-Version: 1.0.2
+Version: 1.0.3
 Author: 柏崎剛 (Tsuyoshi Kashiwazaki)
 Author URI: https://www.tsuyoshikashiwazaki.jp/profile/
 */
@@ -2276,10 +2276,12 @@ class KashiwazakiSEOAutoKeywords {
     }
 
     /**
-     * プラグイン一覧に「設定」リンクを追加
+     * プラグイン一覧に「設定」「一括生成」リンクを追加
      */
     public function add_settings_link($links) {
+        $bulk_link = '<a href="' . admin_url('admin.php?page=kashiwazaki-seo-bulk-keywords') . '">一括生成</a>';
         $settings_link = '<a href="' . admin_url('admin.php?page=kashiwazaki-seo-keywords') . '">設定</a>';
+        array_unshift($links, $bulk_link);
         array_unshift($links, $settings_link);
         return $links;
     }
