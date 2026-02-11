@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-02-11
+
+### Added
+- 一括タグ削除・一括抽出キーワード削除・一括タグ＋抽出キーワード削除ボタンを追加
+- タグ削除・キーワード削除用のAJAXハンドラ（bulk_delete_tags / bulk_delete_keywords）を新設
+- フィルターに個数指定（>= / <=）条件を追加（抽出キーワード・タグ両方）
+- タグ列に「抽出済み・タグ未登録」の中間状態（▲アイコン）を追加
+
+### Changed
+- 設定ページと一括生成ページを1ページに統合し、WordPressタブUIで切り替える方式に変更
+- サブメニューを廃止し、メインメニュー1つに集約
+- 「KW」表記を「抽出」「抽出キーワード」に統一し、ラベルをわかりやすく改善
+- 使い方説明を2ステップ形式（①キーワード抽出 → ②タグ登録）に改善し、タグ未反映であることを赤字で明示
+- AIキーワード抽出プロンプトを改善（スペース・ハイフン結合を禁止し、1語ずつ分割して返すよう指示）
+
 ## [1.0.3] - 2025-12-05
 
 ### Added

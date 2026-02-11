@@ -1,6 +1,6 @@
 # Kashiwazaki SEO Auto Keywords
 
-![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)
 ![License](https://img.shields.io/badge/license-GPL--2.0%2B-green.svg)
 ![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple.svg)
@@ -75,21 +75,4 @@ GPLv2 or later
 
 ## 更新履歴
 
-### [1.0.3] - 2025-12-05
-- **追加**: プラグイン一覧ページに「一括生成」へのリンクを追加
-
-### [1.0.2] - 2025-11-25
-- **追加**: 一括キーワード生成＆登録機能
-- **追加**: キーワードをタグとして一括登録する機能
-- **追加**: タグの絞り込みフィルター
-- **追加**: 表示件数設定（20/50/100/全件）
-- **改善**: 状態列をKW（キーワード生成）とタグ（タグ反映）に分割
-- **改善**: 各記事へのページ表示リンク（↗）を追加
-- **改善**: ボタンラベルの明確化（KW未生成/生成済み）
-
-### [1.0.1] - 2025-11-24
-- **修正**: APIキー設定時の「Undefined index」エラーを修正
-- **改善**: プラグイン一覧から設定画面へのリンクを追加
-
-### [1.0.0] - 2025-09-10
-- 初回リリース
+[CHANGELOG.md](CHANGELOG.md) を参照してください。

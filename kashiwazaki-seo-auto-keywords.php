@@ -3,7 +3,7 @@
 Plugin Name: Kashiwazaki SEO Auto Keywords
 Plugin URI: https://www.tsuyoshikashiwazaki.jp
 Description: OpenAI GPTを使ってWordPress投稿・固定ページ・カスタム投稿・メディアからSEOキーワードを自動生成します。
-Version: 1.0.3
+Version: 1.0.4
 Author: 柏崎剛 (Tsuyoshi Kashiwazaki)
 Author URI: https://www.tsuyoshikashiwazaki.jp/profile/
 */
@@ -41,6 +41,8 @@ class KashiwazakiSEOAutoKeywords {
         add_action('wp_ajax_generate_keywords', array($this, 'generate_keywords_ajax'));
         add_action('wp_ajax_check_api_settings', array($this, 'check_api_settings_ajax'));
         add_action('wp_ajax_register_keywords_as_tags', array($this, 'register_keywords_as_tags_ajax'));
+        add_action('wp_ajax_bulk_delete_tags', array($this, 'bulk_delete_tags_ajax'));
+        add_action('wp_ajax_bulk_delete_keywords', array($this, 'bulk_delete_keywords_ajax'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'add_settings_link'));
     }
@@ -219,18 +221,12 @@ class KashiwazakiSEOAutoKeywords {
             81
         );
 
-        // 一括キーワード生成＆登録サブメニュー
-        add_submenu_page(
-            'kashiwazaki-seo-keywords',
-            '一括キーワード生成＆登録',
-            '一括キーワード生成＆登録',
-            'manage_options',
-            'kashiwazaki-seo-bulk-keywords',
-            'kashiwazaki_seo_bulk_keywords_page_callback'
-        );
     }
 
     public function admin_page() {
+        $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'settings';
+
+        if ($active_tab === 'settings') {
         // APIキーテスト処理
         if (isset($_POST['test_api'])) {
             $test_api_key = sanitize_text_field($_POST['openai_api_key']);
@@ -292,6 +288,7 @@ class KashiwazakiSEOAutoKeywords {
                 echo '<div class="notice notice-info"><p>ℹ️ 除外中のモデルがありませんでした。</p></div>';
             }
         }
+        } // end if ($active_tab === 'settings') POST processing
 
         $api_provider = get_option('kashiwazaki_seo_api_provider', 'openai');
         $api_key = get_option('kashiwazaki_seo_openai_api_key', '');
@@ -308,7 +305,14 @@ class KashiwazakiSEOAutoKeywords {
         $available_models = $this->load_models_from_file();
         ?>
         <div class="wrap">
-            <h1>Kashiwazaki SEO Auto Keywords 設定</h1>
+            <h1>Kashiwazaki SEO Auto Keywords</h1>
+
+            <h2 class="nav-tab-wrapper">
+                <a href="?page=kashiwazaki-seo-keywords&tab=settings" class="nav-tab <?php echo $active_tab === 'settings' ? 'nav-tab-active' : ''; ?>">設定</a>
+                <a href="?page=kashiwazaki-seo-keywords&tab=bulk" class="nav-tab <?php echo $active_tab === 'bulk' ? 'nav-tab-active' : ''; ?>">一括キーワード生成＆登録</a>
+            </h2>
+
+            <?php if ($active_tab === 'settings'): ?>
 
             <div style="background: #f9f9f9; border: 1px solid #ddd; padding: 15px; margin: 20px 0; border-radius: 4px;">
                 <h3 style="margin: 0 0 10px 0;">AIキーワード抽出</h3>
@@ -516,6 +520,10 @@ class KashiwazakiSEOAutoKeywords {
                 </div>
             </div>
             <?php endif; ?>
+
+            <?php elseif ($active_tab === 'bulk'): ?>
+                <?php $this->bulk_keywords_page(); ?>
+            <?php endif; ?>
         </div>
         <?php
     }
@@ -555,6 +563,9 @@ class KashiwazakiSEOAutoKeywords {
         $keyword_filter = isset($_GET['keyword_filter']) ? sanitize_text_field($_GET['keyword_filter']) : '';
         // フィルター：タグ状態
         $tag_filter = isset($_GET['tag_filter']) ? sanitize_text_field($_GET['tag_filter']) : '';
+        // フィルター：件数指定
+        $keyword_count = isset($_GET['keyword_count']) ? max(0, intval($_GET['keyword_count'])) : 0;
+        $tag_count = isset($_GET['tag_count']) ? max(0, intval($_GET['tag_count'])) : 0;
 
         // 投稿タイプの設定（「すべて」の場合は全投稿タイプを配列で指定）
         if ($selected_post_type === 'all') {
@@ -566,7 +577,7 @@ class KashiwazakiSEOAutoKeywords {
         // タグ・状態ソートの場合は全件取得してPHPでソート
         $php_sort = in_array($orderby, array('tags', 'kw_status', 'tag_status'));
         // タグフィルターの場合もPHPでフィルタリングするため全件取得
-        $needs_all_posts = $php_sort || $tag_filter || $per_page === -1;
+        $needs_all_posts = $php_sort || $tag_filter || in_array($keyword_filter, ['gte', 'lte']) || $per_page === -1;
 
         // 投稿を取得
         $args = array(
@@ -607,10 +618,19 @@ class KashiwazakiSEOAutoKeywords {
                     'compare' => '='
                 )
             );
+        } elseif ($keyword_filter === 'gte' && $keyword_count >= 1) {
+            // gte で1件以上の場合、メタが存在するものに事前絞り込み
+            $args['meta_query'] = array(
+                array(
+                    'key' => '_kashiwazaki_seo_keywords',
+                    'value' => '',
+                    'compare' => '!='
+                )
+            );
         }
 
         // タグフィルター（PHPでフィルタリングするためフラグを設定）
-        $filter_by_tag = ($tag_filter === 'has' || $tag_filter === 'none');
+        $filter_by_tag = in_array($tag_filter, ['has', 'none', 'gte', 'lte']);
 
         $query = new WP_Query($args);
 
@@ -619,11 +639,32 @@ class KashiwazakiSEOAutoKeywords {
             $filtered_posts = array();
             foreach ($query->posts as $post) {
                 $post_tags = get_the_tags($post->ID);
-                $has_tags = $post_tags && !is_wp_error($post_tags) && count($post_tags) > 0;
+                $tag_ct = ($post_tags && !is_wp_error($post_tags)) ? count($post_tags) : 0;
 
-                if ($tag_filter === 'has' && $has_tags) {
+                if ($tag_filter === 'has' && $tag_ct > 0) {
                     $filtered_posts[] = $post;
-                } elseif ($tag_filter === 'none' && !$has_tags) {
+                } elseif ($tag_filter === 'none' && $tag_ct === 0) {
+                    $filtered_posts[] = $post;
+                } elseif ($tag_filter === 'gte' && $tag_ct >= $tag_count) {
+                    $filtered_posts[] = $post;
+                } elseif ($tag_filter === 'lte' && $tag_ct <= $tag_count) {
+                    $filtered_posts[] = $post;
+                }
+            }
+            $query->posts = $filtered_posts;
+            $query->post_count = count($filtered_posts);
+            $query->found_posts = count($filtered_posts);
+        }
+
+        // キーワード件数フィルター
+        if (in_array($keyword_filter, ['gte', 'lte']) && $query->have_posts()) {
+            $filtered_posts = array();
+            foreach ($query->posts as $post) {
+                $kw = get_post_meta($post->ID, '_kashiwazaki_seo_keywords', true);
+                $kw_ct = empty($kw) ? 0 : count(explode(',', $kw));
+                if ($keyword_filter === 'gte' && $kw_ct >= $keyword_count) {
+                    $filtered_posts[] = $post;
+                } elseif ($keyword_filter === 'lte' && $kw_ct <= $keyword_count) {
                     $filtered_posts[] = $post;
                 }
             }
@@ -687,30 +728,40 @@ class KashiwazakiSEOAutoKeywords {
         }
 
         // ソートリンク生成用ヘルパー
-        $current_url = admin_url('admin.php?page=kashiwazaki-seo-bulk-keywords&bulk_type=' . $selected_post_type);
+        $current_url = admin_url('admin.php?page=kashiwazaki-seo-keywords&tab=bulk&bulk_type=' . $selected_post_type);
         if ($keyword_filter) {
             $current_url .= '&keyword_filter=' . $keyword_filter;
         }
         if ($tag_filter) {
             $current_url .= '&tag_filter=' . $tag_filter;
         }
+        if ($keyword_count > 0) {
+            $current_url .= '&keyword_count=' . $keyword_count;
+        }
+        if ($tag_count > 0) {
+            $current_url .= '&tag_count=' . $tag_count;
+        }
         if ($per_page_option !== '20') {
             $current_url .= '&per_page=' . $per_page_option;
         }
         ?>
-        <div class="wrap">
-            <h1>一括キーワード生成＆登録</h1>
-
             <div style="background: #f0f8ff; border: 1px solid #b3d9ff; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0 0 8px 0;">
+                    <strong>📋 使い方（2ステップ）:</strong>
+                </p>
+                <p style="margin: 0 0 4px 0;">
+                    <strong>① キーワード抽出</strong>：記事を選択して「キーワード抽出」→ AIがキーワードを抽出・保存します。<span style="color: #d63638;">※ この段階ではまだタグには反映されません。</span>
+                </p>
                 <p style="margin: 0;">
-                    <strong>📋 使い方:</strong> 記事を選択して「キーワード抽出」ボタンをクリックすると、選択した記事のキーワードを一括で抽出・保存します。
+                    <strong>② タグ登録</strong>：「キーワード→タグ登録」→ 抽出済みキーワードをWordPressのタグとして記事に登録します。
                 </p>
             </div>
 
             <!-- フィルター -->
             <div style="margin-bottom: 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
                 <form method="get" style="display: inline-flex; align-items: center; gap: 10px;">
-                    <input type="hidden" name="page" value="kashiwazaki-seo-bulk-keywords">
+                    <input type="hidden" name="page" value="kashiwazaki-seo-keywords">
+                    <input type="hidden" name="tab" value="bulk">
 
                     <label for="bulk_type"><strong>投稿タイプ:</strong></label>
                     <select name="bulk_type" id="bulk_type">
@@ -731,19 +782,25 @@ class KashiwazakiSEOAutoKeywords {
                         <?php endforeach; ?>
                     </select>
 
-                    <label for="keyword_filter"><strong>KW:</strong></label>
+                    <label for="keyword_filter"><strong>抽出:</strong></label>
                     <select name="keyword_filter" id="keyword_filter">
                         <option value="" <?php selected($keyword_filter, ''); ?>>すべて</option>
                         <option value="has" <?php selected($keyword_filter, 'has'); ?>>生成済み</option>
                         <option value="none" <?php selected($keyword_filter, 'none'); ?>>未生成</option>
+                        <option value="gte" <?php selected($keyword_filter, 'gte'); ?>>>= 個数</option>
+                        <option value="lte" <?php selected($keyword_filter, 'lte'); ?>><= 個数</option>
                     </select>
+                    <input type="number" name="keyword_count" id="keyword_count" min="0" value="<?php echo esc_attr($keyword_count); ?>" style="width: 60px; <?php echo in_array($keyword_filter, ['gte', 'lte']) ? '' : 'display:none;'; ?>">
 
                     <label for="tag_filter"><strong>タグ:</strong></label>
                     <select name="tag_filter" id="tag_filter">
                         <option value="" <?php selected($tag_filter, ''); ?>>すべて</option>
                         <option value="has" <?php selected($tag_filter, 'has'); ?>>あり</option>
                         <option value="none" <?php selected($tag_filter, 'none'); ?>>なし</option>
+                        <option value="gte" <?php selected($tag_filter, 'gte'); ?>>>= 個数</option>
+                        <option value="lte" <?php selected($tag_filter, 'lte'); ?>><= 個数</option>
                     </select>
+                    <input type="number" name="tag_count" id="tag_count" min="0" value="<?php echo esc_attr($tag_count); ?>" style="width: 60px; <?php echo in_array($tag_filter, ['gte', 'lte']) ? '' : 'display:none;'; ?>">
 
                     <label for="per_page"><strong>表示:</strong></label>
                     <select name="per_page" id="per_page">
@@ -765,10 +822,19 @@ class KashiwazakiSEOAutoKeywords {
                 <button type="button" id="bulk-tag-btn" class="button button-primary" disabled style="background: #00a32a; border-color: #00a32a;">
                     🏷️ キーワード→タグ登録
                 </button>
+                <button type="button" id="bulk-delete-tags-btn" class="button" disabled style="color: #b32d2e; border-color: #b32d2e;">
+                    🗑️ タグ削除
+                </button>
+                <button type="button" id="bulk-delete-keywords-btn" class="button" disabled style="color: #b32d2e; border-color: #b32d2e;">
+                    🗑️ 抽出キーワード削除
+                </button>
+                <button type="button" id="bulk-delete-both-btn" class="button" disabled style="color: #b32d2e; border-color: #b32d2e;">
+                    🗑️ タグ＋抽出キーワード削除
+                </button>
                 <button type="button" id="select-all-posts" class="button">全選択</button>
                 <button type="button" id="deselect-all-posts" class="button">全解除</button>
-                <button type="button" id="select-no-keywords" class="button">KW未生成を選択</button>
-                <button type="button" id="select-has-keywords" class="button">KW生成済みを選択</button>
+                <button type="button" id="select-no-keywords" class="button">未抽出を選択</button>
+                <button type="button" id="select-has-keywords" class="button">抽出済みを選択</button>
                 <span id="selected-count" style="color: #666;">0件選択中</span>
             </div>
 
@@ -823,9 +889,9 @@ class KashiwazakiSEOAutoKeywords {
                                 <span class="sorting-indicator <?php echo $orderby === 'keywords' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
                             </a>
                         </th>
-                        <th class="manage-column sortable <?php echo $orderby === 'kw_status' ? 'sorted' : ''; ?>" style="width: 40px; text-align: center;" title="キーワード生成状態">
+                        <th class="manage-column sortable <?php echo $orderby === 'kw_status' ? 'sorted' : ''; ?>" style="width: 40px; text-align: center;" title="AIキーワード抽出状態">
                             <a href="<?php echo esc_url($current_url . '&orderby=kw_status&order=' . ($orderby === 'kw_status' && $order === 'DESC' ? 'ASC' : 'DESC')); ?>">
-                                <span>KW</span>
+                                <span>抽出</span>
                                 <span class="sorting-indicator <?php echo $orderby === 'kw_status' ? ($order === 'ASC' ? 'asc' : 'desc') : ''; ?>"></span>
                             </a>
                         </th>
@@ -899,15 +965,19 @@ class KashiwazakiSEOAutoKeywords {
                             <?php endif; ?>
                         </td>
                         <td class="kw-status-cell" style="text-align: center;">
-                            <span class="status-icon <?php echo $keywords ? 'status-ok' : 'status-none'; ?>" title="<?php echo $keywords ? 'キーワード生成済み' : 'キーワード未生成'; ?>">
+                            <span class="status-icon <?php echo $keywords ? 'status-ok' : 'status-none'; ?>" title="<?php echo $keywords ? '抽出済み' : '未抽出'; ?>">
                                 <?php echo $keywords ? '✓' : '−'; ?>
                             </span>
                         </td>
                         <td class="tag-status-cell" style="text-align: center;">
                             <?php $has_tags = $tags && !is_wp_error($tags) && count($tags) > 0; ?>
-                            <span class="status-icon <?php echo $has_tags ? 'status-ok' : 'status-none'; ?>" title="<?php echo $has_tags ? 'タグ反映済み' : 'タグ未反映'; ?>">
-                                <?php echo $has_tags ? '✓' : '−'; ?>
-                            </span>
+                            <?php if ($has_tags): ?>
+                                <span class="status-icon status-ok" title="タグ登録済み">✓</span>
+                            <?php elseif ($keywords): ?>
+                                <span class="status-icon status-pending" title="抽出済み・タグ未登録（タグ登録が必要）" style="color: #dba617;">▲</span>
+                            <?php else: ?>
+                                <span class="status-icon status-none" title="タグ未登録">−</span>
+                            <?php endif; ?>
                         </td>
                         <td style="text-align: center;">
                             <a href="<?php echo get_permalink($post_id); ?>" target="_blank" title="ページを表示" style="text-decoration: none; font-size: 14px;">↗</a>
@@ -944,7 +1014,6 @@ class KashiwazakiSEOAutoKeywords {
                 </div>
             </div>
             <?php endif; ?>
-        </div>
 
         <style>
             .keywords-display-mini, .tags-display-mini {
@@ -1069,6 +1138,9 @@ class KashiwazakiSEOAutoKeywords {
                 $('#selected-count').text(selectedPosts.length + '件選択中');
                 $('#bulk-extract-btn').prop('disabled', selectedPosts.length === 0);
                 $('#bulk-tag-btn').prop('disabled', selectedPosts.length === 0);
+                $('#bulk-delete-tags-btn').prop('disabled', selectedPosts.length === 0);
+                $('#bulk-delete-keywords-btn').prop('disabled', selectedPosts.length === 0);
+                $('#bulk-delete-both-btn').prop('disabled', selectedPosts.length === 0);
             }
 
             // チェックボックス変更
@@ -1098,7 +1170,7 @@ class KashiwazakiSEOAutoKeywords {
                 updateSelectedCount();
             });
 
-            // KW生成済みを選択ボタン
+            // 抽出済みを選択ボタン
             $('#select-has-keywords').on('click', function() {
                 $('.post-checkbox').prop('checked', false);
                 $('tr[data-has-keywords="1"] .post-checkbox').prop('checked', true);
@@ -1149,8 +1221,14 @@ class KashiwazakiSEOAutoKeywords {
                             if (response.success) {
                                 success++;
                                 var keywords = response.data.keywords || response.data;
-                                row.find('.kw-status-cell').html('<span class="status-icon status-ok" title="キーワード生成済み">✓</span>');
+                                row.find('.kw-status-cell').html('<span class="status-icon status-ok" title="抽出済み">✓</span>');
                                 row.attr('data-has-keywords', '1');
+
+                                // タグ未登録ならpending表示に更新
+                                var tagCell = row.find('.tag-status-cell');
+                                if (tagCell.find('.status-ok').length === 0) {
+                                    tagCell.html('<span class="status-icon status-pending" title="抽出済み・タグ未登録（タグ登録が必要）" style="color: #dba617;">▲</span>');
+                                }
 
                                 // キーワード表示を更新
                                 var keywordArray = keywords.split(',').slice(0, 5);
@@ -1202,7 +1280,7 @@ class KashiwazakiSEOAutoKeywords {
                 });
 
                 if (postsWithKeywords.length === 0) {
-                    alert('キーワードが生成されている記事が選択されていません。\n「KW生成済みを選択」ボタンを使用して選択してください。');
+                    alert('キーワードが抽出されている記事が選択されていません。\n「抽出済みを選択」ボタンを使用して選択してください。');
                     return;
                 }
 
@@ -1286,6 +1364,241 @@ class KashiwazakiSEOAutoKeywords {
 
                 processNextTag();
             });
+
+            // 一括タグ削除
+            $('#bulk-delete-tags-btn').on('click', function() {
+                if (selectedPosts.length === 0) return;
+                if (!confirm(selectedPosts.length + '件の記事のタグをすべて削除します。よろしいですか？')) return;
+
+                var btn = $(this);
+                btn.prop('disabled', true).text('処理中...');
+                $('#bulk-progress').show();
+                $('#progress-log').empty();
+
+                var total = selectedPosts.length;
+                var current = 0;
+                var success = 0;
+                var failed = 0;
+                var posts = selectedPosts.slice();
+
+                function processNextDeleteTag() {
+                    if (current >= total) {
+                        btn.prop('disabled', false).html('🗑️ タグ削除');
+                        $('#progress-log').prepend('<div class="success"><strong>完了: ' + success + '件成功, ' + failed + '件失敗</strong></div>');
+                        return;
+                    }
+
+                    var postId = posts[current];
+                    var row = $('tr[data-post-id="' + postId + '"]');
+                    row.find('.tag-status-cell').html('<span class="status-badge processing">...</span>');
+
+                    $.ajax({
+                        url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                        type: 'POST',
+                        data: {
+                            action: 'bulk_delete_tags',
+                            post_id: postId,
+                            nonce: '<?php echo wp_create_nonce('kashiwazaki_seo_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            current++;
+                            var percent = Math.round((current / total) * 100);
+                            $('#progress-bar').css('width', percent + '%');
+                            $('#progress-text').text(current + ' / ' + total);
+
+                            if (response.success) {
+                                success++;
+                                row.find('.tag-status-cell').html('<span class="status-icon status-none" title="タグなし">−</span>');
+                                row.find('.tags-cell').html('<span style="color: #999;">タグなし</span>');
+                                $('#progress-log').prepend('<div class="success">✓ ID:' + postId + ' - ' + response.data.message + '</div>');
+                            } else {
+                                failed++;
+                                row.find('.tag-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                                $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - ' + response.data + '</div>');
+                            }
+
+                            setTimeout(processNextDeleteTag, 100);
+                        },
+                        error: function() {
+                            current++;
+                            failed++;
+                            row.find('.tag-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                            $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - 通信エラー</div>');
+                            setTimeout(processNextDeleteTag, 100);
+                        }
+                    });
+                }
+
+                processNextDeleteTag();
+            });
+
+            // 一括抽出キーワード削除
+            $('#bulk-delete-keywords-btn').on('click', function() {
+                if (selectedPosts.length === 0) return;
+                if (!confirm(selectedPosts.length + '件の記事の抽出キーワードを削除します。よろしいですか？')) return;
+
+                var btn = $(this);
+                btn.prop('disabled', true).text('処理中...');
+                $('#bulk-progress').show();
+                $('#progress-log').empty();
+
+                var total = selectedPosts.length;
+                var current = 0;
+                var success = 0;
+                var failed = 0;
+                var posts = selectedPosts.slice();
+
+                function processNextDeleteKw() {
+                    if (current >= total) {
+                        btn.prop('disabled', false).html('🗑️ 抽出キーワード削除');
+                        $('#progress-log').prepend('<div class="success"><strong>完了: ' + success + '件成功, ' + failed + '件失敗</strong></div>');
+                        return;
+                    }
+
+                    var postId = posts[current];
+                    var row = $('tr[data-post-id="' + postId + '"]');
+                    row.find('.kw-status-cell').html('<span class="status-badge processing">...</span>');
+
+                    $.ajax({
+                        url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                        type: 'POST',
+                        data: {
+                            action: 'bulk_delete_keywords',
+                            post_id: postId,
+                            nonce: '<?php echo wp_create_nonce('kashiwazaki_seo_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            current++;
+                            var percent = Math.round((current / total) * 100);
+                            $('#progress-bar').css('width', percent + '%');
+                            $('#progress-text').text(current + ' / ' + total);
+
+                            if (response.success) {
+                                success++;
+                                row.find('.kw-status-cell').html('<span class="status-icon status-none" title="未設定">−</span>');
+                                row.find('.keywords-cell').html('<span style="color: #999;">未設定</span>');
+                                row.attr('data-has-keywords', '0');
+                                $('#progress-log').prepend('<div class="success">✓ ID:' + postId + ' - ' + response.data.message + '</div>');
+                            } else {
+                                failed++;
+                                row.find('.kw-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                                $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - ' + response.data + '</div>');
+                            }
+
+                            setTimeout(processNextDeleteKw, 100);
+                        },
+                        error: function() {
+                            current++;
+                            failed++;
+                            row.find('.kw-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                            $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - 通信エラー</div>');
+                            setTimeout(processNextDeleteKw, 100);
+                        }
+                    });
+                }
+
+                processNextDeleteKw();
+            });
+
+            // 一括タグ＋抽出キーワード削除
+            $('#bulk-delete-both-btn').on('click', function() {
+                if (selectedPosts.length === 0) return;
+                if (!confirm(selectedPosts.length + '件の記事のタグと抽出キーワードを両方削除します。よろしいですか？')) return;
+
+                var btn = $(this);
+                btn.prop('disabled', true).text('処理中...');
+                $('#bulk-progress').show();
+                $('#progress-log').empty();
+
+                var total = selectedPosts.length;
+                var current = 0;
+                var success = 0;
+                var failed = 0;
+                var posts = selectedPosts.slice();
+
+                function processNextDeleteBoth() {
+                    if (current >= total) {
+                        btn.prop('disabled', false).html('🗑️ タグ＋抽出キーワード削除');
+                        $('#progress-log').prepend('<div class="success"><strong>完了: ' + success + '件成功, ' + failed + '件失敗</strong></div>');
+                        return;
+                    }
+
+                    var postId = posts[current];
+                    var row = $('tr[data-post-id="' + postId + '"]');
+                    row.find('.tag-status-cell').html('<span class="status-badge processing">...</span>');
+                    row.find('.kw-status-cell').html('<span class="status-badge processing">...</span>');
+
+                    // まずタグを削除
+                    $.ajax({
+                        url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                        type: 'POST',
+                        data: {
+                            action: 'bulk_delete_tags',
+                            post_id: postId,
+                            nonce: '<?php echo wp_create_nonce('kashiwazaki_seo_nonce'); ?>'
+                        },
+                        success: function(tagResponse) {
+                            // 次に抽出キーワードを削除
+                            $.ajax({
+                                url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                                type: 'POST',
+                                data: {
+                                    action: 'bulk_delete_keywords',
+                                    post_id: postId,
+                                    nonce: '<?php echo wp_create_nonce('kashiwazaki_seo_nonce'); ?>'
+                                },
+                                success: function(kwResponse) {
+                                    current++;
+                                    var percent = Math.round((current / total) * 100);
+                                    $('#progress-bar').css('width', percent + '%');
+                                    $('#progress-text').text(current + ' / ' + total);
+
+                                    if (tagResponse.success && kwResponse.success) {
+                                        success++;
+                                        row.find('.tag-status-cell').html('<span class="status-icon status-none" title="タグなし">−</span>');
+                                        row.find('.tags-cell').html('<span style="color: #999;">タグなし</span>');
+                                        row.find('.kw-status-cell').html('<span class="status-icon status-none" title="未設定">−</span>');
+                                        row.find('.keywords-cell').html('<span style="color: #999;">未設定</span>');
+                                        row.attr('data-has-keywords', '0');
+                                        $('#progress-log').prepend('<div class="success">✓ ID:' + postId + ' - タグとキーワードを削除しました</div>');
+                                    } else {
+                                        failed++;
+                                        $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - 一部削除に失敗しました</div>');
+                                    }
+
+                                    setTimeout(processNextDeleteBoth, 100);
+                                },
+                                error: function() {
+                                    current++;
+                                    failed++;
+                                    $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - 抽出キーワード削除で通信エラー</div>');
+                                    setTimeout(processNextDeleteBoth, 100);
+                                }
+                            });
+                        },
+                        error: function() {
+                            current++;
+                            failed++;
+                            row.find('.tag-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                            row.find('.kw-status-cell').html('<span class="status-icon status-none" title="エラー">✗</span>');
+                            $('#progress-log').prepend('<div class="error">✗ ID:' + postId + ' - タグ削除で通信エラー</div>');
+                            setTimeout(processNextDeleteBoth, 100);
+                        }
+                    });
+                }
+
+                processNextDeleteBoth();
+            });
+        });
+
+        // フィルタ件数入力欄の表示切替
+        $('#keyword_filter').on('change', function() {
+            var val = $(this).val();
+            $('#keyword_count').toggle(val === 'gte' || val === 'lte');
+        });
+        $('#tag_filter').on('change', function() {
+            var val = $(this).val();
+            $('#tag_count').toggle(val === 'gte' || val === 'lte');
         });
         </script>
         <?php
@@ -1985,7 +2298,7 @@ class KashiwazakiSEOAutoKeywords {
             $actual_api_key = $api_key;
         }
 
-        $prompt = "以下から{$keyword_count}個のSEOキーワードを抽出。必ずカンマ区切りのみで回答：\n" . $scraped_data;
+        $prompt = "以下の文章から{$keyword_count}個のSEOキーワードを抽出してください。\n条件：1キーワード=1単語または1つの固有名詞。ハイフンやスペースで複数語を繋げず、それぞれ別のキーワードとして分割すること。カンマ区切りのみで回答。余計な説明不要。\n\n" . $scraped_data;
 
         $data = array(
             'messages' => array(
@@ -2276,10 +2589,36 @@ class KashiwazakiSEOAutoKeywords {
     }
 
     /**
+     * 一括タグ削除AJAXハンドラ
+     */
+    public function bulk_delete_tags_ajax() {
+        check_ajax_referer('kashiwazaki_seo_nonce', 'nonce');
+        $post_id = intval($_POST['post_id']);
+        if (!$post_id) {
+            wp_send_json_error('投稿IDが指定されていません');
+        }
+        wp_set_post_tags($post_id, array());
+        wp_send_json_success(array('message' => 'タグを削除しました'));
+    }
+
+    /**
+     * 一括キーワード削除AJAXハンドラ
+     */
+    public function bulk_delete_keywords_ajax() {
+        check_ajax_referer('kashiwazaki_seo_nonce', 'nonce');
+        $post_id = intval($_POST['post_id']);
+        if (!$post_id) {
+            wp_send_json_error('投稿IDが指定されていません');
+        }
+        delete_post_meta($post_id, '_kashiwazaki_seo_keywords');
+        wp_send_json_success(array('message' => 'キーワードを削除しました'));
+    }
+
+    /**
      * プラグイン一覧に「設定」「一括生成」リンクを追加
      */
     public function add_settings_link($links) {
-        $bulk_link = '<a href="' . admin_url('admin.php?page=kashiwazaki-seo-bulk-keywords') . '">一括生成</a>';
+        $bulk_link = '<a href="' . admin_url('admin.php?page=kashiwazaki-seo-keywords&tab=bulk') . '">一括生成</a>';
         $settings_link = '<a href="' . admin_url('admin.php?page=kashiwazaki-seo-keywords') . '">設定</a>';
         array_unshift($links, $bulk_link);
         array_unshift($links, $settings_link);
@@ -2290,9 +2629,3 @@ class KashiwazakiSEOAutoKeywords {
 // シングルトンインスタンスを初期化
 KashiwazakiSEOAutoKeywords::get_instance();
 
-/**
- * 一括キーワード生成＆登録ページのコールバック関数
- */
-function kashiwazaki_seo_bulk_keywords_page_callback() {
-    KashiwazakiSEOAutoKeywords::get_instance()->bulk_keywords_page();
-}

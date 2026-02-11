@@ -4,7 +4,7 @@ Tags: seo, keywords, ai, openai
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,6 +43,14 @@ OpenAI公式サイト（https://platform.openai.com/）でアカウント作成�
 最も経済的なGPT-4.1 Nanoを推奨します。
 
 == Changelog ==
+
+= 1.0.4 =
+* 設定ページと一括生成ページをタブUIに統合（サブメニュー廃止）
+* 一括タグ削除・一括抽出キーワード削除・一括両方削除ボタンを追加
+* フィルターに個数指定（>= / <=）条件を追加（抽出・タグ両方）
+* 「KW」表記を「抽出」に統一しラベルをわかりやすく改善
+* 2ステップ操作説明と抽出済み・タグ未登録の中間状態表示を追加
+* AIプロンプト改善（スペース・ハイフン結合禁止、1語ずつ分割）
 
 = 1.0.3 =
 * プラグイン一覧ページに「一括生成」へのリンクを追加
