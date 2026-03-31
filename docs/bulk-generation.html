@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一括キーワード生成＆タグ登録 - Auto Keywords マニュアル</title>
+    <link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+    <button class="hamburger-btn" aria-label="メニューを開く">&#9776;</button>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2 style="color:#fff;">Auto Keywords</h2>
+            <span class="version">v1.0.4</span>
+            <img src="images/main-visual.png" alt="" style="width:100%;border-radius:4px;margin-top:8px;">
+        </div>
+        <ul>
+            <li><a href="index.html">概要</a></li>
+            <li><a href="setup.html">インストール・初期設定</a></li>
+            <li><a href="bulk-generation.html">一括キーワード生成＆タグ登録</a></li>
+            <li><a href="troubleshooting.html">トラブルシューティング</a></li>
+        </ul>
+    </nav>
+    <main class="content">
+        <h1>一括キーワード生成＆タグ登録</h1>
+        <p class="lead">複数の投稿に対してAIキーワード抽出と、WordPressタグへの一括登録を行う機能を解説します。</p>
+
+        <div class="callout callout-note">
+            <p>このプラグインは「ステップ1: キーワード抽出」→「ステップ2: タグ登録」の2ステップ方式です。キーワード抽出だけ行い、タグ登録は後から選択的に実行できます。</p>
+        </div>
+
+        <h2>一括生成画面の概要</h2>
+        <div class="feature-cards">
+            <div class="feature-card">
+                <h3>フィルター＆ソート</h3>
+                <p>投稿タイプ・キーワード状態・タグ状態・件数で絞り込み。各列でソート可能</p>
+            </div>
+            <div class="feature-card">
+                <h3>一括AI抽出</h3>
+                <p>選択した投稿を順番にAI処理。プログレスバーとリアルタイムログ付き</p>
+            </div>
+            <div class="feature-card">
+                <h3>タグ一括登録</h3>
+                <p>抽出済みキーワードをWordPressタグとして一括登録</p>
+            </div>
+        </div>
+
+        <h2>一括生成画面</h2>
+        <figure>
+            <img src="images/screenshots/02-bulk-page.png" alt="一括生成画面">
+            <figcaption>一括生成画面</figcaption>
+        </figure>
+
+        <h2>フィルター機能</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:20%;">フィルター</th>
+                    <th>選択肢</th>
+                    <th>説明</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>投稿タイプ</td>
+                    <td>すべて / 個別タイプ</td>
+                    <td>対象の投稿タイプで絞り込み</td>
+                </tr>
+                <tr>
+                    <td>抽出</td>
+                    <td>すべて / 抽出済み / 未抽出 / ≥N個 / ≤N個</td>
+                    <td>キーワード抽出状態で絞り込み</td>
+                </tr>
+                <tr>
+                    <td>タグ</td>
+                    <td>すべて / あり / なし / ≥N個 / ≤N個</td>
+                    <td>タグ登録状態で絞り込み</td>
+                </tr>
+                <tr>
+                    <td>表示件数</td>
+                    <td>20 / 50 / 100 / すべて</td>
+                    <td>1ページの表示件数</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>ステップ1: キーワード一括抽出</h2>
+        <div class="steps">
+            <div class="step">
+                <span class="step-number">1</span>
+                <div class="step-body">
+                    <p>フィルターで対象投稿を絞り込む</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">2</span>
+                <div class="step-body">
+                    <p>チェックボックスまたはショートカットボタンで投稿を選択</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">3</span>
+                <div class="step-body">
+                    <p>「キーワード抽出」ボタンをクリック</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">4</span>
+                <div class="step-body">
+                    <p>プログレスバーとログがリアルタイム表示される</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">5</span>
+                <div class="step-body">
+                    <p>完了後、各投稿の「生成キーワード」列にキーワードが表示される</p>
+                </div>
+            </div>
+        </div>
+
+        <h2>ステップ2: タグ一括登録</h2>
+        <div class="steps">
+            <div class="step">
+                <span class="step-number">1</span>
+                <div class="step-body">
+                    <p>キーワード抽出済みの投稿を選択</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">2</span>
+                <div class="step-body">
+                    <p>「タグ登録」ボタンをクリック</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">3</span>
+                <div class="step-body">
+                    <p>抽出キーワードがWordPressタグとして登録される</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">4</span>
+                <div class="step-body">
+                    <p>「タグ」列にタグが反映される</p>
+                </div>
+            </div>
+        </div>
+
+        <h2>一括削除機能</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:35%;">ボタン</th>
+                    <th>動作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>タグ削除</td>
+                    <td>選択した投稿のタグをすべて削除</td>
+                </tr>
+                <tr>
+                    <td>キーワード削除</td>
+                    <td>選択した投稿の抽出済みキーワードを削除</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+            <p>キーワード抽出後、結果を確認してからタグ登録できるので、不要なキーワードがタグ化されるのを防げます。</p>
+        </div>
+
+        <figure class="infographic">
+            <img src="images/infographics/bulk-flow.png" alt="一括処理の2ステップフロー">
+            <figcaption>一括処理の2ステップフロー</figcaption>
+        </figure>
+
+        <nav class="page-nav">
+            <a href="setup.html" class="prev">&laquo; インストール・初期設定</a>
+            <a href="troubleshooting.html" class="next">トラブルシューティング &raquo;</a>
+        </nav>
+
+        <footer class="manual-footer">
+            <p>作者: <a href="https://www.tsuyoshikashiwazaki.jp/profile/" target="_blank" rel="noopener">柏崎剛（Tsuyoshi Kashiwazaki）</a></p>
+            <p>プラグイン: Kashiwazaki SEO Auto Keywords v1.0.4</p>
+        </footer>
+    </main>
+    <div class="lightbox"></div>
+    <script src="js/manual.js?v=1"></script>
+</body>
+</html>

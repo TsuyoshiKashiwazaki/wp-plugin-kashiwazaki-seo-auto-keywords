@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>インストール・初期設定 - Auto Keywords マニュアル</title>
+    <link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+    <button class="hamburger-btn" aria-label="メニューを開く">&#9776;</button>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2 style="color:#fff;">Auto Keywords</h2>
+            <span class="version">v1.0.4</span>
+            <img src="images/main-visual.png" alt="" style="width:100%;border-radius:4px;margin-top:8px;">
+        </div>
+        <ul>
+            <li><a href="index.html">概要</a></li>
+            <li><a href="setup.html">インストール・初期設定</a></li>
+            <li><a href="bulk-generation.html">一括キーワード生成＆タグ登録</a></li>
+            <li><a href="troubleshooting.html">トラブルシューティング</a></li>
+        </ul>
+    </nav>
+    <main class="content">
+        <h1>インストール・初期設定</h1>
+
+        <p class="lead">プラグインのインストールから初期設定まで、ステップバイステップで解説します。</p>
+
+        <h2>インストール手順</h2>
+        <div class="step">
+            <span class="step-number">1</span>
+            <div class="step-body">
+                <p>WordPress管理画面の「プラグイン」→「新規追加」→「プラグインのアップロード」からZIPファイルをアップロードします。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">2</span>
+            <div class="step-body">
+                <p>アップロード完了後、「プラグインを有効化」をクリックします。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">3</span>
+            <div class="step-body">
+                <p>有効化すると、WordPress管理画面の左メニューに「Auto Keywords」が表示されます。</p>
+            </div>
+        </div>
+
+        <div class="callout callout-tip">
+            <p>設定画面は「設定」タブと「一括キーワード生成＆登録」タブの2タブ構成です。</p>
+        </div>
+
+        <h2>設定画面</h2>
+        <figure>
+            <img src="images/screenshots/01-settings-page.png" alt="設定画面のスクリーンショット">
+        </figure>
+
+        <h2>OpenAI APIキー設定</h2>
+        <div class="step">
+            <span class="step-number">1</span>
+            <div class="step-body">
+                <p>OpenAIの公式サイトでアカウントを作成します。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">2</span>
+            <div class="step-body">
+                <p>OpenAIダッシュボードからAPIキーを発行します。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">3</span>
+            <div class="step-body">
+                <p>発行したAPIキーをプラグイン設定画面の「OpenAI APIキー」欄に貼り付けます。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">4</span>
+            <div class="step-body">
+                <p>「接続テスト」ボタンをクリックして、APIキーが正しく設定されていることを確認します。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">5</span>
+            <div class="step-body">
+                <p>「設定を保存」ボタンをクリックして設定を保存します。</p>
+            </div>
+        </div>
+
+        <div class="callout callout-warning">
+            <p>APIキーは外部に漏らさないでください。APIの利用には従量課金が発生します。</p>
+        </div>
+
+        <h2>AIモデルの選択</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:25%;">モデル</th>
+                    <th>特徴</th>
+                    <th>コスト</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>GPT-4.1 Nano</td>
+                    <td>最も経済的。基本的な品質</td>
+                    <td>最低</td>
+                </tr>
+                <tr>
+                    <td>GPT-4.1 Mini</td>
+                    <td>コストパフォーマンスが良い</td>
+                    <td>中</td>
+                </tr>
+                <tr>
+                    <td>GPT-4.1</td>
+                    <td>高性能。最高品質</td>
+                    <td>最高</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="callout callout-tip">
+            <p>デフォルトのGPT-4.1 Nanoで十分な品質。エラー時は自動的に他モデルへフォールバックします。</p>
+        </div>
+
+        <h2>キーワード抽出数</h2>
+        <p>1〜100個の範囲で設定できます（デフォルト: 10個）。記事の長さや目的に応じて調整してください。</p>
+
+        <h2>対応する投稿タイプの選択</h2>
+        <p>設定画面から、キーワード抽出の対象とする投稿タイプを選択できます。投稿・固定ページ・カスタム投稿タイプ・メディアに対応しています。</p>
+
+        <h2>メタボックスの使い方</h2>
+        <figure>
+            <img src="images/screenshots/03-meta-box.png" alt="メタボックスのスクリーンショット">
+        </figure>
+
+        <div class="step">
+            <span class="step-number">1</span>
+            <div class="step-body">
+                <p>キーワードを抽出したい投稿の編集画面を開きます。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">2</span>
+            <div class="step-body">
+                <p>編集画面の右側または下部に「Auto Keywords」メタボックスが表示されます。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">3</span>
+            <div class="step-body">
+                <p>「&#128269;キーワード抽出」ボタンをクリックして、AIによるキーワード抽出を実行します。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">4</span>
+            <div class="step-body">
+                <p>抽出されたキーワードがタグ形式で表示されます。</p>
+            </div>
+        </div>
+        <div class="step">
+            <span class="step-number">5</span>
+            <div class="step-body">
+                <p>「&#128203;キーワードをコピー」ボタンをクリックして、抽出されたキーワードをクリップボードにコピーできます。</p>
+            </div>
+        </div>
+
+        <div class="callout callout-note">
+            <p>抽出されたキーワードはpost metaに保存されます。タグとして登録するには別途「タグ登録」操作が必要です（2ステップ方式）。</p>
+        </div>
+
+        <nav class="page-nav">
+            <a href="index.html" class="prev">&laquo; 概要</a>
+            <a href="bulk-generation.html" class="next">一括キーワード生成＆タグ登録 &raquo;</a>
+        </nav>
+
+        <footer class="manual-footer">
+            <p>作者: <a href="https://www.tsuyoshikashiwazaki.jp/profile/" target="_blank" rel="noopener">柏崎剛（Tsuyoshi Kashiwazaki）</a></p>
+            <p>プラグイン: Kashiwazaki SEO Auto Keywords v1.0.4</p>
+        </footer>
+    </main>
+    <div class="lightbox"></div>
+    <script src="js/manual.js?v=1"></script>
+</body>
+</html>

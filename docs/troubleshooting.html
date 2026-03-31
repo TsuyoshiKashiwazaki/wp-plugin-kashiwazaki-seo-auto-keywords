@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>トラブルシューティング - Auto Keywords マニュアル</title>
+    <link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+    <button class="hamburger-btn" aria-label="メニューを開く">&#9776;</button>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2 style="color:#fff;">Auto Keywords</h2>
+            <span class="version">v1.0.4</span>
+            <img src="images/main-visual.png" alt="" style="width:100%;border-radius:4px;margin-top:8px;">
+        </div>
+        <ul>
+            <li><a href="index.html">概要</a></li>
+            <li><a href="setup.html">インストール・初期設定</a></li>
+            <li><a href="bulk-generation.html">一括キーワード生成＆タグ登録</a></li>
+            <li><a href="troubleshooting.html">トラブルシューティング</a></li>
+        </ul>
+    </nav>
+    <main class="content">
+        <h1>トラブルシューティング</h1>
+        <p class="lead">よくある問題とその解決方法をまとめています。</p>
+
+        <h2>キーワードが抽出されない</h2>
+        <p><strong>原因:</strong> OpenAI APIキーが未設定、または無効</p>
+        <div class="steps">
+            <div class="step">
+                <span class="step-number">1</span>
+                <div class="step-body">
+                    <p>設定画面でAPIキーが入力されているか確認する</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">2</span>
+                <div class="step-body">
+                    <p>「テスト」ボタンでAPIキーの有効性を確認する</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">3</span>
+                <div class="step-body">
+                    <p>APIキーが <code>sk-</code> で始まる正しい形式か確認する</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">4</span>
+                <div class="step-body">
+                    <p>OpenAIアカウントのクレジット残高を確認する</p>
+                </div>
+            </div>
+        </div>
+        <div class="callout callout-tip">
+            <p>APIキーが正しくてもクレジット残高がない場合はエラーになります。</p>
+        </div>
+
+        <h2>特定のモデルでエラーが発生する</h2>
+        <p><strong>原因:</strong> モデルが自動除外されている</p>
+        <div class="steps">
+            <div class="step">
+                <span class="step-number">1</span>
+                <div class="step-body">
+                    <p>設定画面の「除外されたモデル」セクションを確認</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">2</span>
+                <div class="step-body">
+                    <p>「復活させる」ボタンで除外を解除</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">3</span>
+                <div class="step-body">
+                    <p>または「一括復活」ボタンですべてのモデルを復活</p>
+                </div>
+            </div>
+        </div>
+        <div class="callout callout-note">
+            <p>エラーが発生したモデルは自動的に除外され、別のモデルにフォールバックします。これはAPI料金の無駄遣いを防ぐ安全機能です。</p>
+        </div>
+
+        <h2>一括処理が途中で止まる</h2>
+        <p><strong>原因:</strong> APIレート制限またはタイムアウト</p>
+        <div class="steps">
+            <div class="step">
+                <span class="step-number">1</span>
+                <div class="step-body">
+                    <p>しばらく待ってから再度実行する</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">2</span>
+                <div class="step-body">
+                    <p>一度に処理する件数を減らす</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">3</span>
+                <div class="step-body">
+                    <p>ブラウザの開発者ツール（コンソール）でエラーを確認する</p>
+                </div>
+            </div>
+        </div>
+        <div class="callout callout-warning">
+            <p>処理中はブラウザのタブを閉じないでください。</p>
+        </div>
+
+        <h2>メタボックスが表示されない</h2>
+        <p><strong>原因:</strong> 投稿タイプが有効化されていない</p>
+        <div class="steps">
+            <div class="step">
+                <span class="step-number">1</span>
+                <div class="step-body">
+                    <p>設定画面を開く</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">2</span>
+                <div class="step-body">
+                    <p>対象の投稿タイプが有効になっているか確認する</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">3</span>
+                <div class="step-body">
+                    <p>設定を保存する</p>
+                </div>
+            </div>
+            <div class="step">
+                <span class="step-number">4</span>
+                <div class="step-body">
+                    <p>ブロックエディターの場合はページ下部までスクロールして確認する</p>
+                </div>
+            </div>
+        </div>
+
+        <h2>動作要件</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:35%;">項目</th>
+                    <th>要件</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>WordPress</td>
+                    <td>5.0以上</td>
+                </tr>
+                <tr>
+                    <td>PHP</td>
+                    <td>7.4以上</td>
+                </tr>
+                <tr>
+                    <td>必要なAPI</td>
+                    <td>OpenAI API（APIキー必須）</td>
+                </tr>
+                <tr>
+                    <td>対応ブラウザ</td>
+                    <td>モダンブラウザ</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>技術仕様</h2>
+        <ul>
+            <li><strong>データ保存:</strong> wp_postmeta（抽出キーワード）、wp_options（設定）、wp_terms（タグ）</li>
+            <li><strong>カスタムテーブル:</strong> なし</li>
+            <li><strong>外部通信:</strong> OpenAI API（https://api.openai.com/v1/chat/completions, /v1/models）</li>
+            <li><strong>通信方式:</strong> wp_remote_post / wp_remote_get（SSL有効、タイムアウト30秒）</li>
+            <li><strong>モデルフォールバック:</strong> エラー時に自動で別モデルに切り替え</li>
+            <li><strong>Cronイベント:</strong> なし</li>
+            <li><strong>メール送信:</strong> なし</li>
+            <li><strong>セキュリティ:</strong> nonce検証、capability チェック（manage_options, edit_post）</li>
+        </ul>
+
+        <figure class="infographic">
+            <img src="images/infographics/architecture.png" alt="プラグインのアーキテクチャ">
+            <figcaption>プラグインのアーキテクチャ</figcaption>
+        </figure>
+
+        <nav class="page-nav">
+            <a href="bulk-generation.html" class="prev">&laquo; 一括キーワード生成＆タグ登録</a>
+            <span></span>
+        </nav>
+
+        <footer class="manual-footer">
+            <p>作者: <a href="https://www.tsuyoshikashiwazaki.jp/profile/" target="_blank" rel="noopener">柏崎剛（Tsuyoshi Kashiwazaki）</a></p>
+            <p>プラグイン: Kashiwazaki SEO Auto Keywords v1.0.4</p>
+        </footer>
+    </main>
+    <div class="lightbox"></div>
+    <script src="js/manual.js?v=1"></script>
+</body>
+</html>
